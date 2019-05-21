@@ -108,7 +108,7 @@ def attribute_exploration_pps(tuples):
     # ORDERING
     order = [(len(set(r)), ri) for ri, r in enumerate(representations)]
     order.sort(key=lambda k: k[0], reverse=False)
-    print (order)
+    #print (order)
     order = {j[1]:i for i,j in enumerate(order)} #Original order -> new order
     inv_order = {i:j for j,i in order.items()}
     for ti, t in enumerate(tuples):
@@ -171,9 +171,9 @@ def attribute_exploration_pps(tuples):
                 fdt.add_fd(X, XJJ)
                 break
             else:
-                print(cache)
+                
                 sampled_tuple, gp = cache.pop()
-                print(sampled_tuple)
+                
                 # for t in sampled_tuple:
                 #     dist[t] += 1
                 sampled_tuples.append(sampled_tuple)
@@ -199,11 +199,11 @@ def attribute_exploration_pps(tuples):
 
         stack[-1][0] = m_i
 
-    for g in g_prime:
-        print (g)
+    #for g in g_prime:
+    #    print (g)
 
     L = list(fdt.read_fds())
-    print ("\nN_FDS:{}".format(len(L)))
+    print ("\nNUMBER OF FDS:{}".format(len(L)))
     print ("SAMPLING CONTEXT SIZE:{}".format(len(g_prime)))
     print ("CYCLES:",cycles)
     print ("GOOD CLOSURES:", count_good_points)
