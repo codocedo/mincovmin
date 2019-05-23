@@ -32,7 +32,7 @@ class FormalContext(object):
             if len(extent) == 1:
                 out = copy.copy(out)
             return out
-        return set(range(len(self.m_prime)))
+        return set(self.M)#set(range(len(self.m_prime)))
 
         
 
@@ -40,25 +40,37 @@ class FormalContext(object):
         return self.derive_extent(self.derive_intent(X))
     
 
-def fast_next_closure(A, M, closure, m_i=None, stack=None):
+def fast_next_closure(A, M, closure, m_i, stack=None):
     closures = 0
+    # for m in range(m_i, -1, -1):# reversed(M):
+    # for m in reversed(range(m_i+1)):#
+    # while True:
+    # print('wtf',list(atts))
     for m in reversed(M):
+        # print(m)
+    # for m in range(m_i, -1, -1):
+        # if m > m_i:
+        #     continue
         if m in A:
             A.remove(m)
             if m == stack[-1][0]:
                 stack.pop()
-        else:
+        elif m <= m_i:
             Mjs = stack[-1][2]
             
             if all(j in A for j in Mjs[m] if j < m):
-                B = closure(A.union([m]))
+                B = closure(A.union([m]), m)
                 closures += 1
                 D = B-A
                 if not bool(D) or m <= min(D):
                     stack.append([None, set([]), list(Mjs)])
                     return B, m, closures
                 else:
+                    print("FAIL",sorted(A),m, sorted(B))
                     Mjs[m] = B
+        # m -= 1
+        # if m < 0:
+        #     break
     return M, M[-1], closures
 
 def next_closure(A, M, closure,  m_i=None, stack=None):

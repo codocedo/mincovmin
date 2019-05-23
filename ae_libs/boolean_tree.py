@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 class BooleanTree(object):
     '''
     BooleanTree that maintains a list of boolean array lists
@@ -12,9 +14,10 @@ class BooleanTree(object):
     def __init__(self):
         self.root = [None, None]
         self.n_elements = 0
+        self.n_new_elements = 0
         self.has_new = False
 
-    def append(self, lst):
+    def append(self, lst, val=False):
         '''
         Insert the list of booleans elements in the Tree
         '''
@@ -29,8 +32,9 @@ class BooleanTree(object):
         if current_node == [None, None]:
             while bool(current_node):
                 current_node.pop()
-            current_node.append(False)
+            current_node.append(val)
             self.n_elements += 1
+            self.n_new_elements += 1
             self.has_new = True
 
     def recursive_read(self, current_node, prefix, single_read=False):
@@ -52,6 +56,16 @@ class BooleanTree(object):
                     for j in self.recursive_read(current_node[i], prefix+[i==1], single_read):
                         yield j
 
+    def __getitem__(self, key):
+        current_node = self.root
+        for i in key:
+            if current_node[i] is None:
+                return None
+            current_node = current_node[i]
+        # print(current_node[0])
+        # exit()
+        return current_node[0]
+
     def read(self, single_read=False):
         '''
         Start the recursion to get all elements in the Tree.
@@ -60,6 +74,7 @@ class BooleanTree(object):
         '''
         if single_read:
             self.has_new = False
+            self.n_new_elements = 0
         for i in self.recursive_read(self.root, [], single_read):
             yield i
 
@@ -68,6 +83,7 @@ class BooleanTree(object):
         Read elements in the Tree that have not been read before
         '''
         self.has_new = False
+        self.n_new_elements = 0
         for i in self.read(single_read=True):
             yield i
 
@@ -79,29 +95,10 @@ class BooleanTree(object):
             current_node = current_node[i]
         return True
 
-    def read_prefix(self, prefix):
-        current_node = self.root
-        for i in prefix:
-            if current_node[i] is None:
-                return 
-            current_node = current_node[i]
-        for i in self.recursive_read(current_node, [], False):
-            yield i
-
     def __len__(self):
         return self.n_elements
     def __repr__(self):
         return "<BooleanTree>::{}".format(list(self.read(single_read=False)))
-
-    # def explode_prefix(self, prefix):
-#     current_node = self.root
-#     for i in prefix:
-#         if current_node[i] is None:
-#             return 
-#         current_node = current_node[i]
-#     for i in self.recursive_read(current_node, [], False):
-#         yield i
-
 
     
 
@@ -126,4 +123,5 @@ if __name__ == "__main__":
     bt.append((True, True, True, True))
     print ("Return Two Elements:", list([i for i in bt])) # Should return only the previous two elements. Same as print list(bt.read(single_read=True)) 
     print ("Return all elements:", list(bt.read(single_read=False))) # should return all elements
+    
     # print sorted(set(lsts))

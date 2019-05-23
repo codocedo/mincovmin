@@ -16,7 +16,7 @@ class FDTree(object):
     def add_fd(self, ant, con):
         
         # self.fds[len(ant)].append((set(ant), set(con)))
-        self.fds.append((set(ant), set(con)))
+        self.fds.append((set(ant), set(con-ant)))
         for m in ant:
             self.fd_index[m].append(self.n_fds)
         if not bool(ant):
@@ -46,12 +46,10 @@ class FDTree(object):
                 for y in self.l_close_and_iterate(current_node[0][i], ant, y):
                     yield y
 
-    def l_close(self, s):
+    def l_close(self, new_closure, minx):
         '''
         Lin Closure
         '''
-        
-        new_closure = s.copy()
         for i in self.trivial:
             new_closure |= self.fds[i][1]
         
@@ -59,7 +57,6 @@ class FDTree(object):
 
         while update:
             m = update.pop()
-            # imps.setdefault(m, [])
             for i in self.fd_index[m]:
                 imp = self.fds[i]
                 self.discounts[i] += 1
@@ -67,6 +64,9 @@ class FDTree(object):
                     add = imp[1] - new_closure
                     new_closure |= imp[1]
                     update.extend(add)
+                    if any(x < minx  for x in add):
+                        update = False
+                        break
 
         for i in range(self.n_fds):
             self.discounts[i] = 0

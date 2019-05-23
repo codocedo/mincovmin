@@ -67,12 +67,15 @@ def check(X, XJJ, tuples, n_atts, cache, rand_tuples):
 
     for h in range(len(tuples)):
         ti = rand_tuples[h]
-        left = ','.join([str(tuples[ti][att]) for att in preintent])
+        row = tuples[ti]
+        # left = tuple((row[att] for att in preintent))
+        left = ','.join((str(row[att]) for att in preintent))
         tj = signatures.get(left, None)
+
         if tj is None:
             signatures[left] = ti
-        elif any(tuples[ti][att] != tuples[tj][att] for att in AII):
-            cache.append(set(att for att in range(n_atts) if tuples[ti][att]==tuples[tj][att]))
+        elif any(row[att] != tuples[tj][att] for att in AII):
+            cache.append(set(att for att in range(n_atts) if row[att]==tuples[tj][att]))
             to_remove = [att for att in AII if att not in cache[-1]]
             for x in to_remove:
                 AII.remove(x)
@@ -91,7 +94,8 @@ def attribute_exploration_pps(tuples):
     rand_tuples.sort(key=lambda i: len(set(tuples[i])))
 
     fctx = FormalContext(g_prime, m_prime)
-    sampled_tuples = []
+
+    m_prime.append(set([])) # THIS SHOULD BE AFTER DECLARING THE FORMAL CONTEXT
 
     representations = [[row[j] for row in tuples] for j in U]
 
@@ -105,84 +109,82 @@ def attribute_exploration_pps(tuples):
         tuples[ti] = [t[inv_order[i]] for i in range(len(t))]
     
     # # END ORDERING
-    Mjs = [set() for i in range(n_atts)]
-    stack = [[None, None],[None, set([]), Mjs]]
 
+    # VARIABLES FOR FAST STACKED NEXT CLOSURE
+    Mjs = [set() for i in range(n_atts)]
+    stack = [[None, m_prime[-1]],[None, set([]), Mjs]]
+
+    # INITIALIZATION VARIABLES
     X = set([])
-    
     fdt = FDTree(U)
-    m_i = -1
+    m_i = -1 # WE START WITH THE EMPTY INTENT REPRESENTED BY THIS
     
+    # COUNTERS TO KEEP SOME PERFORMANCE STATISTICS
     cycles = 0
     cycles2 = 0
-    XJ = set([])
-    XJJ = fctx.closed_set(X)
     avoided_closures = 0
     ncls = 0
-    g_sub = []
     while X != U:
-        
         cycles += 1
         if cycles%1000 == 0:
             print ("\rFDs:{}/{}/{}/{}/{} - {: <100}".format(fdt.n_fds, cycles, cycles2, len(g_prime), (sum([len(mp) for mp in m_prime]))/len(m_prime), ','.join(map(str, sorted(X)))), end='') #stack
             sys.stdout.flush()
-        
-        if m_i >= 0:
-            XJ = stack[-2][1].intersection(m_prime[m_i])
-            if bool(XJ):
-                XJJ = reduce(set.intersection, (g_prime[g] for g in XJ))
-                if len(XJ) == 1:
-                    XJJ = set(XJJ)
-            else:
-                XJJ = set(range(len(m_prime)))
 
-        # cache = {}
+        XJ = stack[-2][1].intersection(m_prime[m_i])
+        if bool(XJ):
+            # XJJ = reduce(set.intersection, (g_prime[g] for g in XJ))
+            XJJ = set.intersection(*[g_prime[g] for g in XJ])
+            if len(XJ) == 1:
+                XJJ = set(XJJ)
+        else:
+            XJJ = set(U)
+
+        # AT THIS POINT WE HAVE XJJ WHICH IS OUR ESTIMATION OF THE CLOSURE
+        # USING THE REPRESENTATION CONTEXT CALCULATED SO FAR
+        # THE ACTUAL CLOSURE SHOULD BE XSS, HOWEVER IF 
+        # X = XJJ WE KNOW THAT XSS = XJJ AND WE CAN AVOID ITS
+        # CALCULATION
+
         XSS = None
         n_x = len(X)
-        
+
         avoided_closures += n_x == len(XJJ)
 
-        while n_x < len(XJJ):
+        while n_x < len(XJJ): # CHECKS WHETHER X==XJJ
+
             cycles2 += 1
-            # sys.stdout.flush()
+
             if XSS is None:
                 cache = []
                 XSS = check(X, XJJ, tuples, n_atts, cache, rand_tuples)
                 cache.sort(key=len)
-                # cache = sorted(cache.items(), key=lambda k: len(k[1]))
-                
-            # sys.stdout.flush()
             
             if len(XJJ) == len(XSS):
                 fdt.add_fd(X, XJJ)
+                print(X,XJJ, m_i)
+                # print(fdt.fds)
                 break
             else:
-<<<<<<< HEAD
                 gp = cache.pop()
 
                 n_gp = len(g_prime)
                 XJ.add(n_gp)
-=======
-                
-                sampled_tuple, gp = cache.pop()
-                
-                # for t in sampled_tuple:
-                #     dist[t] += 1
-                sampled_tuples.append(sampled_tuple)
-                XJ.add(len(g_prime))
->>>>>>> 0529e37842b9645704aab730ce07010aee455fc5
                 for i in stack[1:]:
                     i[1].add(n_gp)
                 for x in gp:
                     m_prime[x].add(n_gp)
-                # print ('\t', gp)
+
                 g_prime.append(gp)
                 XJJ.intersection_update(gp)
-        
-        if not bool(XJJ-X) or m_i <= min(XJJ-X):
+
+        new_atts = XJJ - X
+
+        if not bool(new_atts) or m_i <= min(new_atts):
             m_i = U[-1]
             X = XJJ
         else:
+            # print(stack)
+            stack[-2][2][m_i] = XJJ
             X.difference_update([m for m in X if m > m_i])
 
         stack[-1][1] = XJ
@@ -192,13 +194,9 @@ def attribute_exploration_pps(tuples):
         ncls += c
 
         stack[-1][0] = m_i
-<<<<<<< HEAD
+        
     # print ('--')
     # for g in g_prime:
-=======
-
-    #for g in g_prime:
->>>>>>> 0529e37842b9645704aab730ce07010aee455fc5
     #    print (g)
 
     L = list(fdt.read_fds())
