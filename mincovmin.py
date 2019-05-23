@@ -58,38 +58,27 @@ def check(X, XJJ, tuples, n_atts, cache, rand_tuples):
     '''
     Linear check an FD X -> XJJ
     '''
+    # print(X, XJJ)
     signatures = {}
-    tuple_map = {}
-    
     preintent = sorted(X)
-    members = sorted(XJJ-X)
-    AII = set(range(len(members)))
+    AII = sorted(XJJ-X)
     
-    
+    nt = len(tuples)-1
+
     for h in range(len(tuples)):
         ti = rand_tuples[h]
-        row = tuples[ti]
-        left = tuple([row[att] for att in preintent])
-        right = tuple([row[att] for att in members])
-        sign = signatures.get(left, None)
-        if sign is None:
-            signatures[left] = right
-            tuple_map[left] = ti
-        elif any(sign[idx] != right[idx] for idx in AII):
-            i = ti
-            j = tuple_map[left]
-            new_point = (i,j) if i<j else (j,i)
-            # match = [tuples[i][att]==tuples[j][att] for att in range(n_atts) ]
-            cache[new_point] = set([att for att in range(n_atts) if tuples[i][att]==tuples[j][att]])
-
-            AII.difference_update(list(filter(lambda att: sign[att] != right[att], AII)))
-
-        if not bool(AII):
-            break
-    
-    AII = X.union([members[idx] for idx in AII])
-
-    return AII
+        left = ','.join([str(tuples[ti][att]) for att in preintent])
+        tj = signatures.get(left, None)
+        if tj is None:
+            signatures[left] = ti
+        elif any(tuples[ti][att] != tuples[tj][att] for att in AII):
+            cache.append(set(att for att in range(n_atts) if tuples[ti][att]==tuples[tj][att]))
+            to_remove = [att for att in AII if att not in cache[-1]]
+            for x in to_remove:
+                AII.remove(x)
+            if not bool(AII):
+                break
+    return X.union(AII)
 
 def attribute_exploration_pps(tuples):
     U = range(len(tuples[0])) # Attributes
@@ -98,6 +87,7 @@ def attribute_exploration_pps(tuples):
     g_prime = []
     
     rand_tuples = list(range(len(tuples)))
+    # random.shuffle(rand_tuples)
     rand_tuples.sort(key=lambda i: len(set(tuples[i])))
 
     fctx = FormalContext(g_prime, m_prime)
@@ -105,7 +95,7 @@ def attribute_exploration_pps(tuples):
 
     representations = [[row[j] for row in tuples] for j in U]
 
-    # ORDERING
+    # ATTRIBUTE ORDERING
     order = [(len(set(r)), ri) for ri, r in enumerate(representations)]
     order.sort(key=lambda k: k[0], reverse=False)
     print (order)
@@ -127,9 +117,9 @@ def attribute_exploration_pps(tuples):
     cycles2 = 0
     XJ = set([])
     XJJ = fctx.closed_set(X)
-    count_good_points = 0
-    USet = set(U)
+    avoided_closures = 0
     ncls = 0
+    g_sub = []
     while X != U:
         
         cycles += 1
@@ -143,27 +133,23 @@ def attribute_exploration_pps(tuples):
                 XJJ = reduce(set.intersection, (g_prime[g] for g in XJ))
                 if len(XJ) == 1:
                     XJJ = set(XJJ)
-                # SXJ = sorted(XJ, key=lambda g: len(g_prime[g]))
-                # XJJ = copy.copy(g_prime[SXJ[0]])
-                # for g in SXJ[1:]:
-                #     XJJ.intersection_update(g_prime[g])
-                #     if len(XJJ) == len(X):
-                #         break
             else:
                 XJJ = set(range(len(m_prime)))
 
-        cache = {}
+        # cache = {}
         XSS = None
         n_x = len(X)
         
-        count_good_points += n_x == len(XJJ)
+        avoided_closures += n_x == len(XJJ)
 
         while n_x < len(XJJ):
             cycles2 += 1
             # sys.stdout.flush()
             if XSS is None:
+                cache = []
                 XSS = check(X, XJJ, tuples, n_atts, cache, rand_tuples)
-                cache = sorted(cache.items(), key=lambda k: len(k[1]))
+                cache.sort(key=len)
+                # cache = sorted(cache.items(), key=lambda k: len(k[1]))
                 
             # sys.stdout.flush()
             
@@ -171,17 +157,15 @@ def attribute_exploration_pps(tuples):
                 fdt.add_fd(X, XJJ)
                 break
             else:
-                print(cache)
-                sampled_tuple, gp = cache.pop()
-                print(sampled_tuple)
-                # for t in sampled_tuple:
-                #     dist[t] += 1
-                sampled_tuples.append(sampled_tuple)
-                XJ.add(len(g_prime))
+                gp = cache.pop()
+
+                n_gp = len(g_prime)
+                XJ.add(n_gp)
                 for i in stack[1:]:
-                    i[1].add(len(g_prime))
+                    i[1].add(n_gp)
                 for x in gp:
-                    m_prime[x].add(len(g_prime))
+                    m_prime[x].add(n_gp)
+                # print ('\t', gp)
                 g_prime.append(gp)
                 XJJ.intersection_update(gp)
         
@@ -198,15 +182,15 @@ def attribute_exploration_pps(tuples):
         ncls += c
 
         stack[-1][0] = m_i
-
-    for g in g_prime:
-        print (g)
+    # print ('--')
+    # for g in g_prime:
+    #    print (g)
 
     L = list(fdt.read_fds())
     print ("\nN_FDS:{}".format(len(L)))
     print ("SAMPLING CONTEXT SIZE:{}".format(len(g_prime)))
     print ("CYCLES:",cycles)
-    print ("GOOD CLOSURES:", count_good_points)
+    print ("GOOD CLOSURES:", avoided_closures)
     print ("Closures:", ncls)
     print(fdt.recursions)
 
