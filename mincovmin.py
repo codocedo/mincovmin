@@ -98,7 +98,7 @@ def attribute_exploration_pps(tuples):
     # ATTRIBUTE ORDERING
     order = [(len(set(r)), ri) for ri, r in enumerate(representations)]
     order.sort(key=lambda k: k[0], reverse=False)
-    print (order)
+    #print (order)
     order = {j[1]:i for i,j in enumerate(order)} #Original order -> new order
     inv_order = {i:j for j,i in order.items()}
     for ti, t in enumerate(tuples):
@@ -157,10 +157,20 @@ def attribute_exploration_pps(tuples):
                 fdt.add_fd(X, XJJ)
                 break
             else:
+<<<<<<< HEAD
                 gp = cache.pop()
 
                 n_gp = len(g_prime)
                 XJ.add(n_gp)
+=======
+                
+                sampled_tuple, gp = cache.pop()
+                
+                # for t in sampled_tuple:
+                #     dist[t] += 1
+                sampled_tuples.append(sampled_tuple)
+                XJ.add(len(g_prime))
+>>>>>>> 0529e37842b9645704aab730ce07010aee455fc5
                 for i in stack[1:]:
                     i[1].add(n_gp)
                 for x in gp:
@@ -182,12 +192,17 @@ def attribute_exploration_pps(tuples):
         ncls += c
 
         stack[-1][0] = m_i
+<<<<<<< HEAD
     # print ('--')
     # for g in g_prime:
+=======
+
+    #for g in g_prime:
+>>>>>>> 0529e37842b9645704aab730ce07010aee455fc5
     #    print (g)
 
     L = list(fdt.read_fds())
-    print ("\nN_FDS:{}".format(len(L)))
+    print ("\nNUMBER OF FDS:{}".format(len(L)))
     print ("SAMPLING CONTEXT SIZE:{}".format(len(g_prime)))
     print ("CYCLES:",cycles)
     print ("GOOD CLOSURES:", avoided_closures)
