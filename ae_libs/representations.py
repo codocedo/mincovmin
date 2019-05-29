@@ -2,13 +2,14 @@ import random
 import sys
 import csv
 from itertools import combinations, product
+from collections import defaultdict
 from math import factorial as fac
 from ae_libs.boolean_tree import BooleanTree
 
 
 
 def binomial(x, y):
-    print "BINOMIAL", x, y
+    print ("BINOMIAL", x, y)
     try:
         binom = fac(x) // fac(y) // fac(x - y)
     except ValueError:
@@ -59,11 +60,27 @@ class Representation(object):
     def is_top(self):
         raise NotImplementedError
 
-class Partition(Representation):
-    '''
-    Partiton representation, split partitions
-    list of sets
-    '''
+class Bottom(Representation):
+    def __init__(self, n_tuples):
+        self.n_tuples = n_tuples
+    
+    def intersection(self, other):
+        return other
+    
+    def leq(self, other, cache):
+        if len(other.desc) == 1 and len(other.desc[0]) == self.n_tuples:
+            return True
+        
+        a = random.randint(0, self.n_tuples-1)
+        while a in other.desc[0]:
+            # print(other.desc[0])
+            a = random.randint(0, self.n_tuples-1)
+        b = random.sample(other.desc[0],1)[0]
+        cache.append((a,b))
+        
+        return False
+
+class SetPartition(Representation):
     N_TUPLES = 0
     def __init__(self, desc):
         '''
@@ -72,26 +89,18 @@ class Partition(Representation):
         self.idx = None
         desc = [i for i in desc if len(i) > 1]
         desc.sort(key=lambda k: (len(k), min(k)), reverse=True)
-        if len(desc) == 0:
+        self.T = defaultdict(lambda: -1)#{}#[-1]*Partition.N_TUPLES
+        if not bool(desc):
             desc.append(set([]))
-        super(Partition, self).__init__(desc)
+        super(SetPartition, self).__init__(desc)
         self._nparts = None
-    @property
-    def nparts(self):
-        if self._nparts is None:
-            self._nparts = len(self.desc) + Partition.N_TUPLES - (sum([len(i) for i in self.desc]))
-        return self._nparts
-        
-    def set_idx(self, idx):
-        self.idx = idx
-
     @staticmethod
     def from_lst(lst):
-        Partition.N_TUPLES = max(len(lst), Partition.N_TUPLES)
-        hashes = {}
+        SetPartition.N_TUPLES = max(len(lst), Partition.N_TUPLES)
+        hashes = defaultdict(set)
         for i, j in enumerate(lst):
-            hashes.setdefault(j, set([])).add(i)
-        return Partition(hashes.values())
+            hashes[j].add(i)
+        return SetPartition(hashes.values())
 
     def intersection(self, other):
         '''
@@ -115,6 +124,106 @@ class Partition(Representation):
                         new_desc.append(S[T[t]])
                     S[T[t]] = set([])
 
+        return SetPartition(new_desc)
+
+    # def intersection(self, other):
+    #     new_desc = []
+    #     for i in self.desc:
+    #         for j in other.desc:
+    #             new_desc.append(i.intersection(j))
+    #     return SetPartition(new_desc)
+
+    def leq(self, other, cache):
+        for i in self.desc:
+            found = False
+            for j in other.desc:
+                if i.issubset(j):
+                    found = True
+                    break
+                elif len(i) > len(j):
+                    break
+            if not found:
+                for j in other.desc:
+                    k = i.intersection(j) 
+                    if k:
+                        found = True
+                        a = random.sample(i,1)[0]
+                        while a in j:
+                            a = random.sample(i,1)[0]
+                        b = random.sample(k,1)[0]
+                        cache.append((a,b))
+                        # cache.extend([(a,b) for a,b in zip(i-j, k)])
+                if not found:
+                    cache.extend([(a,b) for a,b in combinations(i, 2)])
+                # print("UNPA", len(cache), i, found)
+                return False
+        return True
+
+
+class Partition(Representation):
+    '''
+    Partiton representation, split partitions
+    list of sets
+    '''
+    N_TUPLES = 0
+    def __init__(self, desc):
+        '''
+        Sort and split the partition
+        '''
+        self.idx = None
+        desc = [i for i in desc if len(i) > 1]
+        desc.sort(key=lambda k: (len(k), min(k)), reverse=True)
+        self.T = defaultdict(lambda: -1)#{}#[-1]*Partition.N_TUPLES
+        for i, k in enumerate(desc):
+            for t in k:
+                self.T[t] = i
+        if not bool(desc):
+            desc.append(set([]))
+        super(Partition, self).__init__(desc)
+        self._nparts = None
+    @property
+    def nparts(self):
+        if self._nparts is None:
+            self._nparts = len(self.desc) + Partition.N_TUPLES - (sum([len(i) for i in self.desc]))
+        return self._nparts
+        
+    def set_idx(self, idx):
+        self.idx = idx
+
+    @staticmethod
+    def from_lst(lst):
+        Partition.N_TUPLES = max(len(lst), Partition.N_TUPLES)
+        hashes = defaultdict(set)
+        for i, j in enumerate(lst):
+            hashes[j].add(i)
+        return Partition(hashes.values())
+
+    def intersection(self, other):
+        '''
+        Procedure STRIPPED_PRODUCT defined in [1]
+        '''
+        new_desc = []
+        T = {}
+        S = defaultdict(set)
+        # for i, k in enumerate(self.desc):
+        #     for t in k:
+        #         T[t] = i
+            # S[i] = set([])
+        # print(self.T)
+        for i, k in enumerate(other.desc):
+            for t in k:
+                if self.T[t]  >= 0:
+                    S[self.T[t]].add(t)
+            for t in S:
+                if len(S[t]) > 1:
+                    new_desc.append(S[t])
+                S[t] = set([])
+            # for t in k:
+            #     if self.T[t] >= 0:
+            #         if len(S[self.T[t]]) > 1:
+            #             new_desc.append(S[self.T[t]])
+            #         S[self.T[t]] = set([])
+
         return Partition(new_desc)
 
 
@@ -126,11 +235,11 @@ class Partition(Representation):
             return True
         # if other.nparts > self.nparts:
         #     return False
-        T = {}
+        # T = {}
 
-        for i, k in enumerate(other.desc):
-            for t in k:
-                T[t] = i
+        # for i, k in enumerate(other.desc):
+        #     for t in k:
+        #         T[t] = i
         
         for i, k in enumerate(self.desc):
             
@@ -138,10 +247,10 @@ class Partition(Representation):
             ti = next(it)
             
 
-            mvalue = T.get(ti, -1)
+            mvalue = other.T[ti]#.get(ti, -1)
             fpair = [ti]
             for ti in it:
-                if T.get(ti, -2) != mvalue:
+                if other.T.get(ti, -2) != mvalue:
                     fpair.append(ti)
                     cache.append(tuple(fpair))
                     
@@ -182,8 +291,6 @@ class Partition(Representation):
 
 
     def pick_sample_from_difference(self, other, samples):
-        # print "PICK", self, other, samples
-        
         for s1 in self.desc:
             for i, j in combinations(s1, 2):
                 if any(i in s2 and j in s2 for s2 in other.desc):
@@ -192,9 +299,7 @@ class Partition(Representation):
                     t = (i,j) if i<j else (j,i)
                     samples.append(t)
                     return t
-        # print samples
-        # exit()
-        # samples.append(next(iter(self.desc - other.desc)))
+
     def is_empty(self):
         return len(self.desc) == 1 and len(self.desc[0]) == 0
 
@@ -622,8 +727,8 @@ class ExpertPartitionSampler(Expert):
         '''
         if self._partitions is None:
             self._partitions = [self.TExpert.from_lst(j) for j in self.ctx]
-            
-            map(lambda (i, p): p.set_idx(i), enumerate(self._partitions))
+            for i, p in enumerate(self._partitions):
+                p.set_idx(i)
             orden = lambda p: (self.n_tuples-sum([len(j) for j in p.desc]))+len(p.desc)
             
             self._partitions.sort(key=orden)
@@ -756,8 +861,8 @@ class ExpertLinearSampler(Expert):
         '''
         if self._partitions is None:
             self._partitions = [self.TExpert.from_lst(j) for j in self.ctx]
-            
-            map(lambda (i, p): p.set_idx(i), enumerate(self._partitions))
+            for i, p in enumerate(self._partitions):
+                p.set_idx(i)
             orden = lambda p: (self.n_tuples-sum([len(j) for j in p.desc]))+len(p.desc)
             
             self._partitions.sort(key=orden)
