@@ -40,33 +40,35 @@ class FormalContext(object):
         return self.derive_extent(self.derive_intent(X))
     
 
-def fast_next_closure(A, M, closure, m_i, stack=None):
-    closures = 0
+def fast_next_closure(A, M, closure, m_i, stats, stack=None):
+    
     for m in reversed(M):
         if m in A:
             A.remove(m)
             if m == stack[-1][0]:
                 stack.pop()
         elif m <= m_i:
+            # bt = stack[0][2]
+            
             Mjs = stack[-1][2]
-            if all(j in A for j in Mjs[m] if j < m):
 
+            D =  Mjs[m] - A
+
+            if not bool(D) or m <= min(D):
                 B = closure(A.union([m]), m)
-                closures += 1
+                stats.closures += 1
                 D = B-A
-
                 if not bool(D) or m <= min(D):
                     stack.append([None, set([]), list(Mjs)])
-                    # print('**',B)
-                    return B, m, closures
+                    return B, m
                 else:
                     # print("FAIL",sorted(A),m, sorted(B))
-                    # print (Mjs)
+                    stats.failures += 1
                     Mjs[m] = B
             # else:
             #     print("AVOIDED",sorted(A),m)
             #     print (Mjs)
-    return M, M[-1], closures
+    return M, M[-1]
 
 def next_closure(A, M, closure,  m_i=None, stack=None):
     # if m_i is None:
