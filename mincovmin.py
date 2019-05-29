@@ -15,48 +15,28 @@ from ae_libs.boolean_tree import BooleanTree
 from ae_libs.fd_tree import FDTree
 from ae_libs.fca import FormalContext, next_closure, PreClosure, fast_next_closure
 from ae_libs import read_csv
-from itertools import product
+from itertools import product, chain
 from collections import defaultdict
 from functools import reduce
 
-def mine_fds(ctx, closure):
-    U = set(ctx.M)
-    fdt = FDTree(U)
-    
-    A = closure(set([]))
-
-    if bool(A):
-        fdt.add_fd(set([]), A)
-    i = max(ctx.M)
-
-    while len(A) < len(ctx.M):
-        
-        for j in reversed(ctx.M):
-            if j in A:
-                A.remove(j)
-            else:
-                B = fdt.l_close(A.union([j]))
-                if not bool(B-A) or j <= min(B-A):
-                    A = B
-                    i = j
-                    break
-        AII = closure(A)
-        # print sorted(A), sorted(AII)
-        if len(A) < len(AII):
-            fdt.add_fd(A, AII-A)
-        if not bool(AII-A) or i <= min(AII-A):
-            A = AII
-            i = max(ctx.M)
-        else:
-            A = A.intersection(set([i for i in range(i+1)]))
-    return fdt
+def build_pli(lst):
+    '''
+    Generates a PLI (position list indexes) given a column in the database (lst) (partition)
+    Example:
+    [0,1,0,1,1,2] -> [[1,3,4], [0,2]]
+    PLIs are ordered by number of indices in each component and filtered of singletons
+    '''
+    hashes = {}
+    for i, j in enumerate(lst):
+        hashes.setdefault(j, set([])).add(i)
+    return sorted([sorted(i) for i in hashes.values() if len(i) > 1], key = lambda k: len(k), reverse=False)
 
 def match(t1, t2):
     return set([i for i, (a,b) in enumerate(zip(tuples[t1], tuples[t2])) if a==b ])
 
-def check(X, XJJ, tuples, n_atts, cache, rand_tuples):
+def check(X, XJJ, tuples, n_atts, cache, rand_tuples, plis):
     '''
-    Linear check an FD X -> XJJ
+    Linear check an FD X -> XJJ-X
     '''
     # print(X, XJJ)
     signatures = {}
@@ -64,18 +44,28 @@ def check(X, XJJ, tuples, n_atts, cache, rand_tuples):
     AII = sorted(XJJ-X)
     
     nt = len(tuples)-1
+    if bool(preintent):
+        torder = chain(*plis[preintent[-1]])
+    else:
+        torder = rand_tuples#range(len(tuples))
+    # print(preintent)
+    # for p in preintent:
 
-    for h in range(len(tuples)):
-        ti = rand_tuples[h]
+    #     print('\t', plis[p])
+    for ti in torder:#range(len(tuples)):
+        # ti = rand_tuples[h]
         row = tuples[ti]
-        # left = tuple((row[att] for att in preintent))
-        left = ','.join((str(row[att]) for att in preintent))
+
+        left = tuple(row[att] for att in preintent)
+        if None in left:
+            continue
+
         tj = signatures.get(left, None)
 
         if tj is None:
             signatures[left] = ti
-        elif any(row[att] != tuples[tj][att] for att in AII):
-            cache.append(set(att for att in range(n_atts) if row[att]==tuples[tj][att]))
+        elif any(row[att] is None or row[att] != tuples[tj][att] for att in AII):
+            cache.append(set(att for att in range(n_atts) if row[att] is not None and row[att]==tuples[tj][att]))
             to_remove = [att for att in AII if att not in cache[-1]]
             for x in to_remove:
                 AII.remove(x)
@@ -98,16 +88,51 @@ def attribute_exploration_pps(tuples):
     m_prime.append(set([])) # THIS SHOULD BE AFTER DECLARING THE FORMAL CONTEXT
 
     representations = [[row[j] for row in tuples] for j in U]
-
-    # ATTRIBUTE ORDERING
-    order = [(len(set(r)), ri) for ri, r in enumerate(representations)]
-    order.sort(key=lambda k: k[0], reverse=False)
-    #print (order)
-    order = {j[1]:i for i,j in enumerate(order)} #Original order -> new order
-    inv_order = {i:j for j,i in order.items()}
-    for ti, t in enumerate(tuples):
-        tuples[ti] = [t[inv_order[i]] for i in range(len(t))]
     
+    # ATTRIBUTE ORDERING
+    plis = [(build_pli(r), ri) for ri, r in enumerate(representations)]
+    plis.sort(key=lambda k: k[0], reverse=False) # Lexicographic
+    # plis.sort(key=lambda k: [len(i) for i in k[0]], reverse=True) # Lexicographic
+    # plis.sort(key=lambda k: sum(len(i) for i in k[0]))
+    # plis.sort(key=lambda k: len(k[0]), reverse=False) # Number of tuples contained in all components
+    # print([len(k[0]) for k in plis])
+    # print([sum(len(i) for i in k[0]) for k in plis])
+    # print([[len(i) for i in k[0]] for k in plis])
+
+    # for i in plis:
+    #     print(i)
+    # print([i for i in plis])
+    #print (order)
+    order = {j[1]:i for i,j in enumerate(plis)} #Original order -> new order
+    inv_order = {i:j for j,i in order.items()}
+    plis = [ i[0] for i in plis ]# build_pli(representations[ inv_order[i] ]) for i in range(n_atts) ]
+    for i in range(len(plis)):
+        for j in range(len(plis[i])):
+            plis[i][j].sort(lambda k: rand_tuples.index(k))
+    # for i in plis:
+    #     print(i)
+
+    tuples = [[None]*n_atts for i in range(len(tuples))]
+    # print(plis)
+    for att in range(n_atts):
+        att = inv_order[att]
+        for i, cluster in enumerate(plis[att]):
+            for row in cluster:
+                tuples[row][att] = i
+    # print(records)
+    # print(tuples)
+    # for ti, t in enumerate(tuples):
+    #     tuples[ti] = [t[inv_order[i]] if any(ti in part for part in plis[i]) else None for i in range(len(t))]
+        # tuples[ti] = [t[inv_order[i]] for i in range(len(t))]
+        # print(tuples[ti], ti,  )
+    # print (tuples)
+    # tuples=records
+        # records[]
+    
+
+    
+
+    # print(plis)
     # # END ORDERING
 
     # VARIABLES FOR FAST STACKED NEXT CLOSURE
@@ -134,8 +159,8 @@ def attribute_exploration_pps(tuples):
         if bool(XJ):
             # XJJ = reduce(set.intersection, (g_prime[g] for g in XJ))
             XJJ = set.intersection(*[g_prime[g] for g in XJ])
-            if len(XJ) == 1:
-                XJJ = set(XJJ)
+            # if len(XJ) == 1:
+            #     XJJ = set(XJJ)
         else:
             XJJ = set(U)
 
@@ -151,18 +176,14 @@ def attribute_exploration_pps(tuples):
         avoided_closures += n_x == len(XJJ)
 
         while n_x < len(XJJ): # CHECKS WHETHER X==XJJ
-
             cycles2 += 1
-
             if XSS is None:
                 cache = []
-                XSS = check(X, XJJ, tuples, n_atts, cache, rand_tuples)
+                XSS = check(X, XJJ, tuples, n_atts, cache, rand_tuples, plis)
                 cache.sort(key=len)
-            
             if len(XJJ) == len(XSS):
                 fdt.add_fd(X, XJJ)
-                print(X,XJJ, m_i)
-                # print(fdt.fds)
+                # print(X, XJJ-X)
                 break
             else:
                 gp = cache.pop()
@@ -185,7 +206,9 @@ def attribute_exploration_pps(tuples):
         else:
             # print(stack)
             stack[-2][2][m_i] = XJJ
+            # print('\t',m_i, XJJ)
             X.difference_update([m for m in X if m > m_i])
+            
 
         stack[-1][1] = XJ
 

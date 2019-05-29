@@ -42,35 +42,30 @@ class FormalContext(object):
 
 def fast_next_closure(A, M, closure, m_i, stack=None):
     closures = 0
-    # for m in range(m_i, -1, -1):# reversed(M):
-    # for m in reversed(range(m_i+1)):#
-    # while True:
-    # print('wtf',list(atts))
     for m in reversed(M):
-        # print(m)
-    # for m in range(m_i, -1, -1):
-        # if m > m_i:
-        #     continue
         if m in A:
             A.remove(m)
             if m == stack[-1][0]:
                 stack.pop()
         elif m <= m_i:
             Mjs = stack[-1][2]
-            
             if all(j in A for j in Mjs[m] if j < m):
+
                 B = closure(A.union([m]), m)
                 closures += 1
                 D = B-A
+
                 if not bool(D) or m <= min(D):
                     stack.append([None, set([]), list(Mjs)])
+                    # print('**',B)
                     return B, m, closures
                 else:
-                    print("FAIL",sorted(A),m, sorted(B))
+                    # print("FAIL",sorted(A),m, sorted(B))
+                    # print (Mjs)
                     Mjs[m] = B
-        # m -= 1
-        # if m < 0:
-        #     break
+            # else:
+            #     print("AVOIDED",sorted(A),m)
+            #     print (Mjs)
     return M, M[-1], closures
 
 def next_closure(A, M, closure,  m_i=None, stack=None):
