@@ -27,7 +27,6 @@ class Stats(object):
         self.conflicting_attributes = defaultdict(lambda: 0)
         self.non_conflicting = defaultdict(lambda: 0)
 
-
 def build_pli(lst):
     '''
     Generates a PLI (position list indexes) given a column in the database (lst) (partition)
@@ -39,6 +38,39 @@ def build_pli(lst):
     for i, j in enumerate(lst):
         hashes.setdefault(j, set([])).add(i)
     return sorted([sorted(i) for i in hashes.values() if len(i) > 1], key = lambda k: len(k), reverse=False)
+
+
+def mine_fds(ctx, closure):
+    U = set(ctx.M)
+    fdt = FDTree(U)
+    
+    A = closure(set([]))
+
+    if bool(A):
+        fdt.add_fd(set([]), A)
+    i = max(ctx.M)
+
+    while len(A) < len(ctx.M):
+        
+        for j in reversed(ctx.M):
+            if j in A:
+                A.remove(j)
+            else:
+                B = fdt.l_close(A.union([j]))
+                if not bool(B-A) or j <= min(B-A):
+                    A = B
+                    i = j
+                    break
+        AII = closure(A)
+        # print sorted(A), sorted(AII)
+        if len(A) < len(AII):
+            fdt.add_fd(A, AII-A)
+        if not bool(AII-A) or i <= min(AII-A):
+            A = AII
+            i = max(ctx.M)
+        else:
+            A = A.intersection(set([i for i in range(i+1)]))
+    return fdt
 
 def match(t1, t2):
     return set([i for i, (a,b) in enumerate(zip(tuples[t1], tuples[t2])) if a==b ])
@@ -54,6 +86,7 @@ def check(X, XJJ, tuples, n_atts, cache, plis, stats):
     for x in AII:
         stats.non_conflicting[x]+=1
     nt = len(tuples)-1
+
     if bool(preintent):
         torder = chain(*plis[preintent[0]])
     else:
@@ -83,45 +116,30 @@ def check(X, XJJ, tuples, n_atts, cache, plis, stats):
                 break
     # return X.union(AII)
 
+
 def attribute_exploration_pps(tuples):
     U = range(len(tuples[0])) # Attributes
-    n_atts = len(U)
-    m_prime = [set([]) for i in range(len(U))]
-    g_prime = []
-    stats = Stats()
-    
-    
+    n_atts = len(U) # Number of attributes
 
-    fctx = FormalContext(g_prime, m_prime)
-
-    m_prime.append(set([])) # THIS SHOULD BE AFTER DECLARING THE FORMAL CONTEXT
+    # rand_tuples = list(range(len(tuples)))
+    # rand_tuples.sort(key=lambda i: len(set(tuples[i])))
 
     print ("Processing data... ", end='')
     sys.stdout.flush()
     representations = [[row[j] for row in tuples] for j in U]
     print("done")
-    
-    # ATTRIBUTE ORDERING
-    print ("Building representations... ", end='')
-    sys.stdout.flush()
     plis = [(build_pli(r), ri) for ri, r in enumerate(representations)]
-    print("done")
+    stats = Stats()
 
+    # ORDERING
     print ("Ordering... ", end='')
     sys.stdout.flush()
     # ATTRIBUTE ORDERING
-    # ex_order = [290, 17, 7, 7, 489, 14, 10, 31, 509, 6, 341, 151, 16, 28, 49, 4, 1, 19, 571, 810, 6, 8, 17]
-    # plis.sort(key=lambda k: ex_order[k[1]], reverse=False) # Lexicographic
     plis.sort(key=lambda k: k[0], reverse=False) # Lexicographic
     order = {j[1]:i for i,j in enumerate(plis)} #Original order -> new order
     inv_order = {i:j for j,i in order.items()} # At position i should be attribute j
-    # print(order)
-    # print(inv_order)
-    # exit()
-    
-    # reco_order = { }
 
-    plis = [ i[0] for i in plis ]# build_pli(representations[ inv_order[i] ]) for i in range(n_atts) ]
+    plis = [ i[0] for i in plis ]
     print("done")
 
     print ("Reconverting... ", end='')
@@ -136,122 +154,55 @@ def attribute_exploration_pps(tuples):
                 tuples[row][att] = i
                 
     print("done")
-        
-    # print(records)
-    # print(tuples)
-    # for ti, t in enumerate(tuples):
-    #     tuples[ti] = [t[inv_order[i]] if any(ti in part for part in plis[i]) else None for i in range(len(t))]
-        # tuples[ti] = [t[inv_order[i]] for i in range(len(t))]
-        # print(tuples[ti], ti,  )
-    # print (tuples)
-    # tuples=records
-        # records[]
-    
-
-    
-
-    # print(plis)
     # # END ORDERING
 
-    # VARIABLES FOR FAST STACKED NEXT CLOSURE
-    Mjs = [set() for i in range(n_atts)]
-    stack = [[None, m_prime[-1]],[None, set([]), Mjs]]
+    Mjs = [set() for i in range(n_atts)] # Needed by fast version of next_closure
+    stack = [[None, None],[None, set([]), Mjs]] # Stack for next_closure
 
-    # INITIALIZATION VARIABLES
     X = set([])
-    fdt = FDTree(U)
-    m_i = -1 # WE START WITH THE EMPTY INTENT REPRESENTED BY THIS
     
-    # COUNTERS TO KEEP SOME PERFORMANCE STATISTICS
+    fdt = FDTree(U)
+    m_i = -1
+    
     cycles = 0
     cycles2 = 0
-    avoided_closures = 0
+    XJ = set([])
+    
     ncls = 0
+    sU = set(U)
     while X != U:
+        
+        # Feedback Output
         cycles += 1
-        if cycles%1000 == 0:
-            print ("\rFDs:{}/{}/{}/{}/{} - {: <100}".format(fdt.n_fds, cycles, cycles2, len(g_prime), round((sum([len(mp) for mp in m_prime]))/len(m_prime)), ','.join(map(str, sorted(X)))), end='') #stack
+        if cycles%1 == 0:
+            print ("\rFDs:{}/{}".format(fdt.n_fds, cycles),  ','.join(map(str, sorted(X))), end='') #stack
             sys.stdout.flush()
 
-        XJ = stack[-2][1].intersection(m_prime[m_i])
-        if bool(XJ):
-            # XJJ = reduce(set.intersection, (g_prime[g] for g in XJ))
-            XJJ = set.intersection(*[g_prime[g] for g in XJ])
-            # if len(XJ) == 1:
-            #     XJJ = set(XJJ)
-        else:
-            XJJ = set(U)
+        # Stack re-use
+        cache = []
+        XSS = set(U)
+        check(X, XSS, tuples, n_atts, cache, plis, stats)
 
-        # AT THIS POINT WE HAVE XJJ WHICH IS OUR ESTIMATION OF THE CLOSURE
-        # USING THE REPRESENTATION CONTEXT CALCULATED SO FAR
-        # THE ACTUAL CLOSURE SHOULD BE XSS, HOWEVER IF 
-        # X = XJJ WE KNOW THAT XSS = XJJ AND WE CAN AVOID ITS
-        # CALCULATION
-
-        # XSS = None
-        n_x = len(X)
-
-        avoided_closures += n_x == len(XJJ)
-
-        if n_x < len(XJJ): # CHECKS WHETHER X==XJJ
-            cycles2 += 1
-            cache = []
-            check(X, XJJ, tuples, n_atts, cache, plis, stats)
-            
-            if n_x < len(XJJ):
-                fdt.add_fd(X, XJJ)
-                # break
-            else:
-                cache.sort(key=len)
-                gp = cache.pop()
-
-                n_gp = len(g_prime)
-                XJ.add(n_gp)
-                for i in stack[1:]:
-                    i[1].add(n_gp)
-                for x in gp:
-                    m_prime[x].add(n_gp)
-
-                g_prime.append(gp)
-                # XJJ.intersection_update(gp)
-
-        new_atts = XJJ - X
-
-        if not bool(new_atts) or m_i <= min(new_atts):
+        if len(X) != len(XSS):
+            fdt.add_fd(X, XSS)
+            stack[-1][-1][m_i] = XSS
+        
+        if not bool(XSS-X) or m_i <= min(XSS-X):
             m_i = U[-1]
-            X = XJJ
+            X = XSS
         else:
-            # print(stack)
-            stack[-2][2][m_i] = XJJ
-            # print('\t',m_i, XJJ)
             X.difference_update([m for m in X if m > m_i])
-            
 
         stack[-1][1] = XJ
-        
+
         X, m_i= fast_next_closure(X, U, fdt.l_close, m_i, stats, stack)
-
-        # ncls += c
-
         stack[-1][0] = m_i
-        
-    # print ('--')
-    # for g in g_prime:
-    #    print (g)
 
     L = list(fdt.read_fds())
-    print ("\nNUMBER OF FDS:{}".format(len(L)))
-    print ("SAMPLING CONTEXT SIZE:{}".format(len(g_prime)))
+    print ("\nN_FDS:{}".format(len(L)))
     print ("CYCLES:",cycles)
-    print ("DB CHECKS:",cycles2)
-    print ("GOOD CLOSURES:", avoided_closures)
-    print ("Closures:", stats.closures)
-    print ("Failures:", stats.failures)
-    print ("Row check:", stats.row_check)
-    print ("Conflicting Attributes:", [stats.conflicting_attributes[order[i]] for i in range(n_atts)])
-    print ("Non Conflicting Attributes:", [stats.non_conflicting[order[i]] for i in range(n_atts)])
-    # print("EFF:", [abs(stats.conflicting_attributes[order[i]]-stats.non_conflicting[order[i]]) for i in range(n_atts)])
-    print(order)
+    print ("Closures:", ncls)
+    print(fdt.recursions)
 
 
 if __name__ == "__main__":
@@ -262,11 +213,9 @@ if __name__ == "__main__":
     # __parser__.add_argument('-p', '--use_patterns', help='Use Pattern Structures for DB', action='store_true')
     __parser__.add_argument('-i', '--ignore_headers', help='Ignore Headers', action='store_true')
     args = __parser__.parse_args()
-    print("Reading data...", end='')
-    sys.stdout.flush()
-    tuples = read_csv(args.database, separator=args.separator)
-    print("done")
 
+    tuples = read_csv(args.database, separator=args.separator)
+    
     t0 = time.time()
     attribute_exploration_pps(tuples)
     print ("TIME: {}s".format(time.time()-t0))

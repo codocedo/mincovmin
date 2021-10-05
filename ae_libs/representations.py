@@ -6,10 +6,8 @@ from collections import defaultdict
 from math import factorial as fac
 from ae_libs.boolean_tree import BooleanTree
 
-
-
 def binomial(x, y):
-    print ("BINOMIAL", x, y)
+    # print ("BINOMIAL", x, y)
     try:
         binom = fac(x) // fac(y) // fac(x - y)
     except ValueError:
@@ -241,11 +239,9 @@ class Partition(Representation):
         #     for t in k:
         #         T[t] = i
         
-        for i, k in enumerate(self.desc):
-            
+        for i, k in enumerate(self.desc):            
             it = iter(k)
             ti = next(it)
-            
 
             mvalue = other.T[ti]#.get(ti, -1)
             fpair = [ti]
@@ -253,7 +249,6 @@ class Partition(Representation):
                 if other.T.get(ti, -2) != mvalue:
                     fpair.append(ti)
                     cache.append(tuple(fpair))
-                    
                     return False
         return True
 
@@ -327,16 +322,16 @@ class PairSet(Representation):
     def from_lst(lst):
         '''
         Generates the set of pairs from a list of elements
-        [1,2,1,2] generates the pairs [(0,2), (1,3)]
+        [1,2,1,2] generates the pairs set([(0,2), (1,3)])
         Actually, pairs are the transitive closure of the equivalence relation
         '''
-        Pairset.N_TUPLES = max(len(lst), Pairset.N_TUPLES)
+        PairSet.N_TUPLES = max(len(lst), PairSet.N_TUPLES)
         hashes = {}
         for i, j in enumerate(lst):
             hashes.setdefault(j, set([])).add(i)
         desc = set([])
         for val in hashes.values():
-            map(desc.add, combinations(sorted(val), 2))
+            list(map(desc.add, combinations(sorted(val), 2)))
         return PairSet(desc)
         
 
@@ -355,7 +350,17 @@ class PairSet(Representation):
     # def is_top(self):
     #     return len(self.desc) == binomial(PairSet.N_TUPLES, 2)
         
+class BottomPairSet(Representation):
+    def __init__(self, n_tuples):
+        self.n_tuples = n_tuples
     
+    def intersection(self, other):
+        return other
+    
+    def leq(self, other):
+        if len(other.desc) == binomial(self.n_tuples, 2):
+            return True
+        return False
 
 
 '''
@@ -440,7 +445,6 @@ class Database(object):
         for i, j in self.ps.items():
             if j.is_top():
                 yield i 
-
 
 class Expert(Database):
     def __init__(self, stack):
@@ -588,7 +592,6 @@ class Expert(Database):
         for i, j in self._real_ps.items():
             if j.is_top():
                 yield i 
-
 
 class ExpertPartitionSampler(Expert):
     '''
